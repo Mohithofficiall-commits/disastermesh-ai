@@ -6,6 +6,8 @@ import {
   severityColor, statusColor, formatTime, EmptyState,
 } from '@/components/ui';
 import { broadcastEvent } from '@/engine/sync';
+import { subscribeEventIngested } from '@/engine/relayClient';
+import { TACTICAL_LOCATIONS, CITIES, type TacticalLocation } from '@/lib/locations';
 import type { RescueTask, TaskType, TaskPriority, TaskStatus, Incident } from '@/types';
 import {
   ClipboardList, Plus, MapPin, User, Clock, Trash2, CheckCircle2, AlertCircle,
@@ -39,8 +41,12 @@ export function Tasks() {
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeEventIngested(loadData);
     const interval = setInterval(loadData, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const filtered = filterStatus === 'all' ? tasks : tasks.filter((t) => t.status === filterStatus);
@@ -212,6 +218,8 @@ function TaskFormModal({
   incidents: Incident[];
   peers: { id: string; name: string }[];
 }) {
+  const [selectedCity, setSelectedCity] = useState<string>('Central Metro');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [form, setForm] = useState<Partial<RescueTask>>({
     type: 'rescue',
     priority: 'medium',
@@ -223,16 +231,51 @@ function TaskFormModal({
     lng: -118.2437,
   });
 
+  const handleSelectPreset = (loc: TacticalLocation) => {
+    setSelectedPresetId(loc.id);
+    setSelectedCity(loc.city);
+    setForm((prev) => ({
+      ...prev,
+      lat: loc.lat,
+      lng: loc.lng,
+      title: prev.title || `Rescue Operation at ${loc.label.split('&')[0]}`,
+      description: prev.description || `Tactical mission dispatched to ${loc.label} (${loc.street}). ${loc.description}`,
+    }));
+  };
+
+  const handleIncidentChange = (incId: string) => {
+    const inc = incidents.find((i) => i.id === incId);
+    if (inc) {
+      setForm((prev) => ({
+        ...prev,
+        incidentId: incId,
+        lat: inc.lat,
+        lng: inc.lng,
+        title: prev.title || `Respond to: ${inc.title}`,
+        priority: inc.severity === 'critical' ? 'critical' : inc.severity === 'high' ? 'high' : 'medium',
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, incidentId: '' }));
+    }
+  };
+
   const handleSubmit = () => {
     if (!form.title?.trim()) return;
-    const inc = incidents.find((i) => i.id === form.incidentId);
-    if (inc) {
-      form.lat = inc.lat;
-      form.lng = inc.lng;
-    }
     onCreate(form);
-    setForm({ type: 'rescue', priority: 'medium', title: '', description: '', incidentId: '', assignedTo: null, lat: 34.0522, lng: -118.2437 });
+    setForm({
+      type: 'rescue',
+      priority: 'medium',
+      title: '',
+      description: '',
+      incidentId: '',
+      assignedTo: null,
+      lat: 34.0522,
+      lng: -118.2437,
+    });
+    setSelectedPresetId('');
   };
+
+  const cityLocations = TACTICAL_LOCATIONS.filter((l) => l.city === selectedCity);
 
   return (
     <Modal
@@ -247,14 +290,76 @@ function TaskFormModal({
       }
     >
       <div className="space-y-4">
-        <FormField label="Title" required>
-          <input className={inputClass} value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Task title" />
-        </FormField>
-        <FormField label="Linked Incident">
-          <select className={inputClass} value={form.incidentId || ''} onChange={(e) => setForm({ ...form, incidentId: e.target.value })}>
-            <option value="">None</option>
-            {incidents.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
+        {/* Linked Incident Selector */}
+        <FormField label="Linked Incident (Auto-Coordinates)">
+          <select
+            className={inputClass}
+            value={form.incidentId || ''}
+            onChange={(e) => handleIncidentChange(e.target.value)}
+          >
+            <option value="">None (Standalone Task / Custom Location)</option>
+            {incidents.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.title} — {i.locationLabel} [{i.severity.toUpperCase()}]
+              </option>
+            ))}
           </select>
+        </FormField>
+
+        {/* Location Presets Header (if not tied to an existing incident) */}
+        {!form.incidentId && (
+          <div className="bg-sand/30 p-3 rounded-xl border border-sand">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-slate-forest flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-forest" /> Deployment Location (City & Street)
+              </label>
+              <select
+                value={selectedCity}
+                onChange={(e) => {
+                  setSelectedCity(e.target.value);
+                  const first = TACTICAL_LOCATIONS.find((l) => l.city === e.target.value);
+                  if (first) handleSelectPreset(first);
+                }}
+                className="text-xs rounded-lg border border-sand bg-white px-2 py-1 text-slate-forest font-medium"
+              >
+                {CITIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {cityLocations.map((loc) => {
+                const active = selectedPresetId === loc.id;
+                return (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onClick={() => handleSelectPreset(loc)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border text-left transition-all ${
+                      active
+                        ? 'bg-forest text-white border-forest shadow-xs'
+                        : 'bg-white border-sand text-slate-forest hover:border-forest/40'
+                    }`}
+                  >
+                    <span className="font-semibold">{loc.label.split('&')[0]}</span>
+                    <span className={`block text-[10px] ${active ? 'text-white/80' : 'text-slate-muted'}`}>
+                      {loc.street}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="text-[11px] text-slate-muted flex items-center justify-between pt-1 border-t border-sand/50">
+              <span>Target GPS: <b>{form.lat?.toFixed(4)}, {form.lng?.toFixed(4)}</b></span>
+              <span>District: <b>{TACTICAL_LOCATIONS.find((l) => l.id === selectedPresetId)?.district || 'Custom'}</b></span>
+            </div>
+          </div>
+        )}
+
+        <FormField label="Task Title" required>
+          <input className={inputClass} value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g., Evacuate trapped civilians from river crossing" />
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Type" required>
@@ -268,12 +373,12 @@ function TaskFormModal({
             </select>
           </FormField>
         </div>
-        <FormField label="Description">
-          <textarea className={`${inputClass} min-h-[80px]`} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Task details and instructions" />
+        <FormField label="Description & Action Orders">
+          <textarea className={`${inputClass} min-h-[70px]`} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Task tactical orders, required equipment, hazards" />
         </FormField>
-        <FormField label="Assign To">
+        <FormField label="Assign Unit">
           <select className={inputClass} value={form.assignedTo || ''} onChange={(e) => setForm({ ...form, assignedTo: e.target.value || null })}>
-            <option value="">Unassigned</option>
+            <option value="">Unassigned (Open Dispatch)</option>
             {peers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </FormField>
@@ -285,7 +390,7 @@ function TaskFormModal({
             <input type="number" step="0.0001" className={inputClass} value={form.lng || 0} onChange={(e) => setForm({ ...form, lng: parseFloat(e.target.value) || 0 })} />
           </FormField>
         </div>
-        <p className="text-xs text-slate-muted">Task creation is advisory. Human operator must approve dispatch of emergency services.</p>
+        <p className="text-xs text-slate-muted">Rescue tasks are broadcasted live across the tactical mesh.</p>
       </div>
     </Modal>
   );

@@ -4,6 +4,7 @@ import { useApp } from '@/store/AppStore';
 import { Card, StatCard, PageHeader, Badge, Button } from '@/components/ui';
 import { runAllAgents } from '@/engine/agents';
 import { attemptDelivery } from '@/engine/sync';
+import { subscribeEventIngested } from '@/engine/relayClient';
 import type { Incident, RescueTask, InventoryItem, SyncEvent, Peer, AgentRecommendation } from '@/types';
 import {
   AlertTriangle,
@@ -47,12 +48,16 @@ export function Dashboard() {
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeEventIngested(loadData);
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadData();
       }
     }, 8000);
-    return () => clearInterval(interval);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const activeIncidents = incidents.filter((i) => i.status === 'active');

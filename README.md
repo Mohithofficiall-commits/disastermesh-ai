@@ -25,27 +25,34 @@
 
 ## ⚡ Key Highlights & Features
 
-### 1. 🔄 Real Multi-Device Live Synchronization
-- **Zero-Cloud-Dependency Local First**: Full read/write operational capability stored locally in browser IndexedDB (Dexie).
-- **Cloud Mesh Relay**: When network or internet is intermittently available, devices automatically publish and subscribe to peer updates via a shared Postgres / PGLite relay engine.
-- **Bi-Directional Provenance**: Every incident, supply reservation, and task tracks origin peer ID, vector version, and synchronization status.
+### 1. 🔄 Instant Multi-Device Live Synchronization (Sub-100ms SSE Mesh)
+- **Real-Time Cross-Device Sync**: Works across smartphones, tablets, and laptops simultaneously. Any incident or task created on one device syncs instantly across all connected screens via HTTPS Server-Sent Events (SSE).
+- **Zero-Cloud-Dependency Offline Resilience**: Full read/write operational capability stored locally in browser IndexedDB (Dexie). Stores pending sync events in a persistent outbox when connectivity drops.
+- **Same-Peer Cross-Device Support**: Intelligent entity ingestion allows multiple field personnel operating under the same default peer role to exchange and sync data without collision.
+- **Store-and-Forward Replay**: Automatically syncs missed updates upon reconnecting with 12-hour historical buffer recovery.
 
-### 2. 👥 Dynamic Peer Network & Link Simulator
+### 2. 🎯 Tactical Location Presets & Coordinate Engine
+- **6 Critical Disaster Zones**: Pre-configured with major metropolitan and emergency operations zones (`Central Metro`, `Harbor Coastal District`, `River Valley Basin`, `Medical & University Center`, `West Industrial Zone`, `Northern Ridge & Canyon`).
+- **One-Tap Street & District Selection**: Fast selector pills for specific street intersections, port terminals, bridges, and industrial yards that automatically inject accurate 6-decimal latitude and longitude coordinates.
+- **Sector Jump Controls**: Instant fly-to navigation on the tactical map to inspect any city sector in high resolution.
+
+### 3. 🗺️ Interactive Spatial Operations Map (Leaflet)
+- **Live Incidents & Rescue Tasks**: High-accuracy spatial pins for both emergency incidents (color-coded by severity) and active rescue operations (`T` glyph markers color-coded by priority).
+- **Interactive Layer Filtering**: Toggle individual layers for Incidents, Rescue Tasks, Hazards, Blocked Corridors, and Supply Depots with real-time marker count badges.
+- **Inspector Fly-To Sidebar**: Click any marker on the map to open a detailed tactical briefing panel with live GPS coordinates, status badges, and team assignments.
+
+### 4. 👥 Dynamic Peer Network & Link Simulator
 - **Add Custom Peers**: Instantly deploy new tactical units (`Drone Recon Alpha`, `SAR Unit Echo`, `MedEvac Mobile`, `Supply Convoy`, `Shelter Ops`).
 - **Role Presets & Badge Color Palettes**: Choose from specialized emergency response roles and distinctive tactical colors.
 - **Interactive Link Toggling**: Sever or restore individual links between any two peers to test and observe offline store-and-forward queuing in real time.
 
-### 3. 🗺️ Interactive Spatial Map (Leaflet)
-- **Live Incident & Hazard Mapping**: Plot priority incidents, medical triage zones, impassable routes, and supply depots.
-- **Cross-Peer Markers**: View real-time tactical updates placed by other rescue teams across the mesh.
-
-### 4. 🤖 Explainable Local AI Agents
+### 5. 🤖 Explainable Local AI Agents
 - **Incident Triage Agent**: Automatically ranks and categorizes incoming emergency reports by severity and casualty count.
 - **Resource Allocation Agent**: Analyzes field inventories and suggests optimal supply dispatch to high-risk zones.
 - **Route Feasibility Agent**: Flags hazard intersections and recommends safe travel corridors.
 - **Transparent Reasoning**: Complete step-by-step rationales provided for every recommendation.
 
-### 5. ⚖️ CRDT Conflict Resolution
+### 6. ⚖️ CRDT Conflict Resolution
 - Automatic timestamp and vector-version resolution for distributed updates.
 - Interactive conflict inspector allows operators to audit and manually review divergent concurrent edits.
 

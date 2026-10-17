@@ -6,6 +6,8 @@ import {
   severityColor, statusColor, formatTime, EmptyState,
 } from '@/components/ui';
 import { broadcastEvent } from '@/engine/sync';
+import { subscribeEventIngested } from '@/engine/relayClient';
+import { TACTICAL_LOCATIONS, CITIES, type TacticalLocation } from '@/lib/locations';
 import type { Incident, IncidentType, IncidentSeverity, IncidentStatus } from '@/types';
 import {
   AlertTriangle, Plus, MapPin, Users, CheckCircle2, Clock, Trash2,
@@ -41,8 +43,12 @@ export function Incidents() {
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeEventIngested(loadData);
     const interval = setInterval(loadData, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   const filtered = filterStatus === 'all'
@@ -258,6 +264,8 @@ function IncidentFormModal({
   title?: string;
   initialData?: Partial<Incident> | null;
 }) {
+  const [selectedCity, setSelectedCity] = useState<string>('Central Metro');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [form, setForm] = useState<Partial<Incident>>({
     type: 'flood',
     severity: 'medium',
@@ -272,24 +280,43 @@ function IncidentFormModal({
   useEffect(() => {
     if (initialData) {
       setForm(initialData);
+      setSelectedPresetId('');
     } else {
+      const defaultLoc = TACTICAL_LOCATIONS[0];
       setForm({
         type: 'flood',
         severity: 'medium',
         title: '',
         description: '',
-        locationLabel: '',
+        locationLabel: `${defaultLoc.label} (${defaultLoc.street}, ${defaultLoc.city})`,
         peopleAffected: 0,
-        lat: 34.0522,
-        lng: -118.2437,
+        lat: defaultLoc.lat,
+        lng: defaultLoc.lng,
       });
+      setSelectedCity(defaultLoc.city);
+      setSelectedPresetId(defaultLoc.id);
     }
   }, [initialData, open]);
+
+  const handleSelectPreset = (loc: TacticalLocation) => {
+    setSelectedPresetId(loc.id);
+    setSelectedCity(loc.city);
+    setForm((prev) => ({
+      ...prev,
+      locationLabel: `${loc.label} (${loc.street}, ${loc.city})`,
+      lat: loc.lat,
+      lng: loc.lng,
+      title: prev.title || `${loc.label} Incident`,
+      description: prev.description || loc.description,
+    }));
+  };
 
   const handleSubmit = () => {
     if (!form.title || !form.title.trim()) return;
     onSubmit(form);
   };
+
+  const cityLocations = TACTICAL_LOCATIONS.filter((l) => l.city === selectedCity);
 
   return (
     <Modal
@@ -304,8 +331,58 @@ function IncidentFormModal({
       }
     >
       <div className="space-y-4">
-        <FormField label="Title" required>
-          <input className={inputClass} value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Brief incident title" />
+        {/* Location Presets Header */}
+        <div className="bg-sand/30 p-3 rounded-xl border border-sand">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-slate-forest flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-forest" /> Location Preset (City & Street)
+            </label>
+            <select
+              value={selectedCity}
+              onChange={(e) => {
+                setSelectedCity(e.target.value);
+                const first = TACTICAL_LOCATIONS.find((l) => l.city === e.target.value);
+                if (first) handleSelectPreset(first);
+              }}
+              className="text-xs rounded-lg border border-sand bg-white px-2 py-1 text-slate-forest font-medium"
+            >
+              {CITIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {cityLocations.map((loc) => {
+              const active = selectedPresetId === loc.id;
+              return (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onClick={() => handleSelectPreset(loc)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border text-left transition-all ${
+                    active
+                      ? 'bg-forest text-white border-forest shadow-xs'
+                      : 'bg-white border-sand text-slate-forest hover:border-forest/40'
+                  }`}
+                >
+                  <span className="font-semibold">{loc.label.split('&')[0]}</span>
+                  <span className={`block text-[10px] ${active ? 'text-white/80' : 'text-slate-muted'}`}>
+                    {loc.street}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-[11px] text-slate-muted flex items-center justify-between pt-1 border-t border-sand/50">
+            <span>GPS Pin: <b>{form.lat?.toFixed(4)}, {form.lng?.toFixed(4)}</b></span>
+            <span>District: <b>{TACTICAL_LOCATIONS.find((l) => l.id === selectedPresetId)?.district || 'Custom'}</b></span>
+          </div>
+        </div>
+
+        <FormField label="Incident Title" required>
+          <input className={inputClass} value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g., Flash Flood at River Crossing" />
         </FormField>
         <FormField label="Type" required>
           <select className={inputClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as IncidentType })}>
@@ -313,7 +390,7 @@ function IncidentFormModal({
           </select>
         </FormField>
         <FormField label="Description">
-          <textarea className={`${inputClass} min-h-[80px]`} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detailed description" />
+          <textarea className={`${inputClass} min-h-[70px]`} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detailed tactical situation assessment" />
         </FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Severity" required>
@@ -325,7 +402,7 @@ function IncidentFormModal({
             <input type="number" min={0} className={inputClass} value={form.peopleAffected || 0} onChange={(e) => setForm({ ...form, peopleAffected: parseInt(e.target.value) || 0 })} />
           </FormField>
         </div>
-        <FormField label="Location Label">
+        <FormField label="Street & Location Label">
           <input className={inputClass} value={form.locationLabel || ''} onChange={(e) => setForm({ ...form, locationLabel: e.target.value })} placeholder="e.g., Riverside Community Center" />
         </FormField>
         <div className="grid grid-cols-2 gap-3">

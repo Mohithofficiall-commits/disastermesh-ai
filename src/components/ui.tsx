@@ -162,7 +162,7 @@ export function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="absolute inset-0 bg-slate-forest/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-ivory rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col border border-sand">
         <div className="px-6 py-4 border-b border-sand flex items-center justify-between">

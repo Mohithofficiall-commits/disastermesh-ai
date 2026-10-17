@@ -20,6 +20,7 @@ import {
   startRelayAutoSync,
   syncWithCloudRelay,
   subscribeRelayStatus,
+  subscribeEventIngested,
   type RelaySyncStatus,
 } from "@/engine/relayClient";
 
@@ -78,6 +79,13 @@ export function App() {
     });
     return unsub;
   }, []);
+
+  useEffect(() => {
+    const unsub = subscribeEventIngested(async () => {
+      await refreshPeers();
+    });
+    return unsub;
+  }, [refreshPeers]);
 
   useEffect(() => {
     const stop = startRelayAutoSync(() => currentPeerId);

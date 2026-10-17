@@ -81,6 +81,15 @@ export async function broadcastEvent(
       isDemo,
     );
     events.push(evt);
+
+    // Broadcast immediately to live cloud mesh
+    if (typeof window !== 'undefined') {
+      import('@/engine/relayClient')
+        .then(({ publishLiveMeshEvent }) => {
+          publishLiveMeshEvent(evt).catch(() => {});
+        })
+        .catch(() => {});
+    }
   }
   return events;
 }
